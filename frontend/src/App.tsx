@@ -92,7 +92,7 @@ export default function App() {
           <Route
             path="/submit-claim"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute allowedRoles={['customer']}>
                 <SubmitClaimPage />
               </ProtectedRoute>
             }
@@ -116,7 +116,7 @@ export default function App() {
           <Route
             path="/analytics"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute allowedRoles={['investigator']}>
                 <AnalyticsPage />
               </ProtectedRoute>
             }

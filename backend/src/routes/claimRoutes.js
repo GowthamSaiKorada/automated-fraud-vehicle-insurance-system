@@ -44,6 +44,17 @@ function resolveSafeClaimImagePath(storedPath) {
   return resolved;
 }
 
+function sanitizeClaimForCustomer(claimDoc) {
+  const obj = typeof claimDoc.toObject === 'function' ? claimDoc.toObject() : { ...claimDoc };
+  delete obj.aiPrediction;
+  delete obj.confidenceScore;
+  delete obj.latestAnalysisId;
+  if (obj.investigationStatus === 'Flagged for Manual Investigation' || obj.investigationStatus === 'Pending Analysis') {
+    obj.investigationStatus = 'Pending Review';
+  }
+  return obj;
+}
+
 // POST /api/claims/upload-image
 router.post('/upload-image', authenticate, (req, res) => {
   uploadMiddleware.single('image')(req, res, (err) => {
@@ -190,6 +201,7 @@ router.post('/:id/analyze', authenticate, async (req, res, next) => {
       disclaimer: aiResponse.disclaimer || '',
       analysisDetails: aiResponse.analysis_details || {},
       damageDetection: damageResponse,
+      modelComparisons: aiResponse.model_comparisons || [],
       analyzedAt: new Date(),
     });
 
@@ -201,6 +213,13 @@ router.post('/:id/analyze', authenticate, async (req, res, next) => {
         ? 'Flagged for Manual Investigation'
         : 'Pending Review';
     await claim.save();
+
+    if (req.user.role !== 'investigator') {
+      return res.json({
+        message: 'Claim submitted and queued for investigator review.',
+        claim: sanitizeClaimForCustomer(claim),
+      });
+    }
 
     return res.json({
       message: 'AI image authenticity analysis completed.',
@@ -237,11 +256,11 @@ router.get('/my', authenticate, async (req, res, next) => {
       ];
     }
 
-    const claims = await InsuranceClaim.find(query)
-      .populate('latestAnalysisId')
-      .sort({ createdAt: -1 });
+    const claims = await InsuranceClaim.find(query).sort({ createdAt: -1 });
 
-    return res.json({ claims });
+    return res.json({
+      claims: claims.map((c) => sanitizeClaimForCustomer(c)),
+    });
   } catch (err) {
     next(err);
   }
@@ -318,6 +337,14 @@ router.get('/:id', authenticate, async (req, res, next) => {
     const investigationHistory = await InvestigationRecord.find({ claimId: claim._id }).sort({
       reviewedAt: -1,
     });
+
+    if (req.user.role !== 'investigator') {
+      return res.json({
+        claim: sanitizeClaimForCustomer(claim),
+        analysisResult: null,
+        investigationHistory,
+      });
+    }
 
     return res.json({
       claim,

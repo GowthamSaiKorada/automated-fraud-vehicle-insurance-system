@@ -12,7 +12,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import AppLayout from '../components/AppLayout';
-import { ConfidenceBar, InvestigationStatusBadge, PredictionBadge } from '../components/StatusBadges';
+import { InvestigationStatusBadge } from '../components/StatusBadges';
 import { apiClient, extractErrorMessage } from '../api/client';
 import { AnalyticsDashboardResponse } from '../types';
 
@@ -56,7 +56,7 @@ export default function CustomerDashboardPage() {
   return (
     <AppLayout
       title="Customer Dashboard"
-      subtitle="Track your submitted vehicle claims and AI authenticity verification results"
+      subtitle="Track your submitted vehicle claims and investigator decisions"
       actions={
         <Link
           to="/submit-claim"
@@ -78,8 +78,8 @@ export default function CustomerDashboardPage() {
           <Info className="mt-0.5 h-4 w-4 shrink-0 text-sky-600" />
           <div>
             <strong>Demo Dataset Included:</strong> This account includes{' '}
-            {summary?.demoDataCount} seeded sample claims labeled <em>Demo</em> so you can explore
-            verification reports immediately. Submit a new claim to run live image forensic analysis.
+            {summary?.demoDataCount} seeded sample claims labeled <em>SAMPLE</em> so you can explore
+            the portal immediately.
           </div>
         </div>
       )}
@@ -98,31 +98,31 @@ export default function CustomerDashboardPage() {
 
         <div className="rounded-2xl border border-emerald-200/80 bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-emerald-700">
-            <span>Authentic Claims</span>
+            <span>Approved Claims</span>
             <CheckCircle2 className="h-4 w-4 text-emerald-600" />
           </div>
           <div className="mt-3 text-3xl font-bold tabular-nums text-emerald-700">
-            {loading ? '—' : summary?.authenticClaims ?? 0}
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-rose-200/80 bg-white p-5 shadow-sm">
-          <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-rose-700">
-            <span>Suspicious Claims</span>
-            <ShieldAlert className="h-4 w-4 text-rose-600" />
-          </div>
-          <div className="mt-3 text-3xl font-bold tabular-nums text-rose-700">
-            {loading ? '—' : summary?.suspiciousClaims ?? 0}
+            {loading ? '—' : summary?.approvedClaims ?? 0}
           </div>
         </div>
 
         <div className="rounded-2xl border border-amber-200/80 bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-amber-800">
-            <span>Pending Investigations</span>
+            <span>Pending Review</span>
             <Clock className="h-4 w-4 text-amber-600" />
           </div>
           <div className="mt-3 text-3xl font-bold tabular-nums text-amber-700">
             {loading ? '—' : summary?.pendingReviews ?? 0}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-rose-200/80 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-rose-700">
+            <span>Rejected Claims</span>
+            <ShieldAlert className="h-4 w-4 text-rose-600" />
+          </div>
+          <div className="mt-3 text-3xl font-bold tabular-nums text-rose-700">
+            {loading ? '—' : summary?.rejectedClaims ?? 0}
           </div>
         </div>
       </div>
@@ -132,7 +132,7 @@ export default function CustomerDashboardPage() {
         <div>
           <h2 className="text-lg font-bold">Need to file a new vehicle accident claim?</h2>
           <p className="mt-1 text-sm text-sky-100/85">
-            Upload accident photos for instant AI authenticity verification and submit directly to our claims desk.
+            Upload your accident photos and submit directly to our insurance investigation team.
           </p>
         </div>
         <Link
@@ -149,7 +149,7 @@ export default function CustomerDashboardPage() {
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
           <div>
             <h2 className="text-base font-bold text-[#0B1E3D]">Recent Claim Submissions</h2>
-            <p className="text-xs text-slate-500">Latest claims and AI image verification outcomes</p>
+            <p className="text-xs text-slate-500">Latest claims and investigator review statuses</p>
           </div>
           <Link
             to="/claims"
@@ -182,9 +182,7 @@ export default function CustomerDashboardPage() {
                   <th className="px-6 py-3">Claim ID</th>
                   <th className="px-6 py-3">Vehicle</th>
                   <th className="px-6 py-3">Submitted</th>
-                  <th className="px-6 py-3">AI Prediction</th>
-                  <th className="px-6 py-3">Confidence</th>
-                  <th className="px-6 py-3">Investigation Status</th>
+                  <th className="px-6 py-3">Claim Status</th>
                   <th className="px-6 py-3 text-right">Action</th>
                 </tr>
               </thead>
@@ -205,15 +203,6 @@ export default function CustomerDashboardPage() {
                     </td>
                     <td className="px-6 py-4 text-xs text-slate-600 tabular-nums">
                       {new Date(claim.createdAt).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4">
-                      <PredictionBadge
-                        prediction={claim.aiPrediction}
-                        isDemo={claim.latestAnalysisId?.isDemoPrediction}
-                      />
-                    </td>
-                    <td className="px-6 py-4">
-                      <ConfidenceBar score={claim.confidenceScore} prediction={claim.aiPrediction} />
                     </td>
                     <td className="px-6 py-4">
                       <InvestigationStatusBadge status={claim.investigationStatus} />

@@ -7,5 +7,6 @@ __pycache__/
 .venv/
 ai-service/.ultralytics/
 ai-service/.torch_cache/
+backend/.mongo_data/
 backend/uploads/claims/*
 !backend/uploads/claims/.gitkeep

@@ -99,12 +99,47 @@ router.get('/dashboard', authenticate, async (req, res, next) => {
 
     const statusCounts = {};
     for (const claim of claims) {
-      statusCounts[claim.investigationStatus] = (statusCounts[claim.investigationStatus] || 0) + 1;
+      const displayStatus =
+        req.user.role !== 'investigator' &&
+        (claim.investigationStatus === 'Flagged for Manual Investigation' ||
+          claim.investigationStatus === 'Pending Analysis')
+          ? 'Pending Review'
+          : claim.investigationStatus;
+      statusCounts[displayStatus] = (statusCounts[displayStatus] || 0) + 1;
     }
     const statusDistribution = Object.entries(statusCounts).map(([status, count]) => ({
       status,
       count,
     }));
+
+    if (req.user.role !== 'investigator') {
+      const sanitizedRecent = claims.slice(0, 6).map((c) => {
+        const obj = c.toObject();
+        delete obj.aiPrediction;
+        delete obj.confidenceScore;
+        delete obj.latestAnalysisId;
+        if (
+          obj.investigationStatus === 'Flagged for Manual Investigation' ||
+          obj.investigationStatus === 'Pending Analysis'
+        ) {
+          obj.investigationStatus = 'Pending Review';
+        }
+        return obj;
+      });
+
+      return res.json({
+        summary: {
+          totalClaims,
+          pendingReviews,
+          approvedClaims,
+          rejectedClaims,
+          demoDataCount,
+        },
+        hasDemoData: demoDataCount > 0,
+        statusDistribution,
+        recentClaims: sanitizedRecent,
+      });
+    }
 
     return res.json({
       summary: {

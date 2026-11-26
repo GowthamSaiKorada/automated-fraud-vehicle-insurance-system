@@ -36,6 +36,7 @@ interface UploadedImageMeta {
 
 export default function SubmitClaimPage() {
   const { user } = useAuth();
+  const isInvestigator = user?.role === 'investigator';
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -97,7 +98,11 @@ export default function SubmitClaimPage() {
         imageSizeBytes: res.data.imageSizeBytes,
       });
       setUploadProgress(100);
-      setStatusMessage('Image uploaded and verified. Ready to run AI Authenticity Analysis.');
+      setStatusMessage(
+        isInvestigator
+          ? 'Image uploaded and verified. Ready to run AI Authenticity Analysis.'
+          : 'Image uploaded successfully. Ready to submit claim.'
+      );
     } catch (err) {
       setUploadedImage(null);
       setPreviewUrl('');
@@ -142,7 +147,7 @@ export default function SubmitClaimPage() {
 
     setAnalyzing(true);
     try {
-      setStatusMessage('Saving claim record to MongoDB...');
+      setStatusMessage('Submitting claim...');
       const claimRes = await apiClient.post('/claims', {
         customerName: customerName.trim(),
         policyNumber: policyNumber.trim(),
@@ -157,14 +162,18 @@ export default function SubmitClaimPage() {
 
       const createdClaimId = claimRes.data.claim._id;
 
-      setStatusMessage('Sending image to Python FastAPI AI service for CNN & forensic analysis...');
+      setStatusMessage(
+        isInvestigator
+          ? 'Sending image to Python FastAPI AI service for CNN & forensic analysis...'
+          : 'Finalizing claim submission for investigator review...'
+      );
       await apiClient.post(
         `/claims/${createdClaimId}/analyze${runYoloCheck ? '?detectDamage=true' : ''}`
       );
 
       navigate(`/claims/${createdClaimId}`);
     } catch (err) {
-      setError(extractErrorMessage(err, 'Claim submission or AI analysis failed.'));
+      setError(extractErrorMessage(err, 'Claim submission failed.'));
       setStatusMessage('');
     } finally {
       setAnalyzing(false);
@@ -174,7 +183,11 @@ export default function SubmitClaimPage() {
   return (
     <AppLayout
       title="Submit Vehicle Insurance Claim"
-      subtitle="Provide incident details and upload accident photography for AI authenticity verification"
+      subtitle={
+        isInvestigator
+          ? 'Provide incident details and upload accident photography for AI authenticity verification'
+          : 'Provide incident details and upload vehicle accident photography for investigator review'
+      }
     >
       <form onSubmit={handleSubmitAndAnalyze} className="grid gap-6 lg:grid-cols-12">
         {/* Left column: Claim Metadata Form */}
@@ -418,15 +431,17 @@ export default function SubmitClaimPage() {
               </div>
             )}
 
-            <label className="mt-5 flex items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-700">
-              <input
-                type="checkbox"
-                checked={runYoloCheck}
-                onChange={(e) => setRunYoloCheck(e.target.checked)}
-                className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
-              />
-              <span>Also check optional YOLO vehicle damage localization endpoint</span>
-            </label>
+            {isInvestigator && (
+              <label className="mt-5 flex items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={runYoloCheck}
+                  onChange={(e) => setRunYoloCheck(e.target.checked)}
+                  className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                />
+                <span>Also check optional YOLO vehicle damage localization endpoint</span>
+              </label>
+            )}
 
             {statusMessage && (
               <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs font-medium text-sky-800">
@@ -442,12 +457,12 @@ export default function SubmitClaimPage() {
               {analyzing ? (
                 <>
                   <RefreshCw className="h-4 w-4 animate-spin" />
-                  Analyzing Image...
+                  {isInvestigator ? 'Analyzing Image...' : 'Submitting Claim...'}
                 </>
               ) : (
                 <>
-                  <Cpu className="h-4 w-4" />
-                  Analyze Image & Submit Claim
+                  {isInvestigator ? <Cpu className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
+                  {isInvestigator ? 'Analyze Image & Submit Claim' : 'Submit Claim'}
                 </>
               )}
             </button>

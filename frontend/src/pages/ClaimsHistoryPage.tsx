@@ -9,6 +9,7 @@ import { InsuranceClaim } from '../types';
 
 export default function ClaimsHistoryPage() {
   const { user } = useAuth();
+  const isInvestigator = user?.role === 'investigator';
   const [claims, setClaims] = useState<InsuranceClaim[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -46,13 +47,15 @@ export default function ClaimsHistoryPage() {
       title="Claims History"
       subtitle="Complete record of submitted vehicle accident claims and verification statuses"
       actions={
-        <Link
-          to="/submit-claim"
-          className="inline-flex items-center gap-2 rounded-xl bg-[#0B1E3D] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#143666]"
-        >
-          <FilePlus2 className="h-4 w-4" />
-          New Claim
-        </Link>
+        !isInvestigator ? (
+          <Link
+            to="/submit-claim"
+            className="inline-flex items-center gap-2 rounded-xl bg-[#0B1E3D] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#143666]"
+          >
+            <FilePlus2 className="h-4 w-4" />
+            New Claim
+          </Link>
+        ) : undefined
       }
     >
       {error && (
@@ -90,9 +93,9 @@ export default function ClaimsHistoryPage() {
                   <th className="px-6 py-3">Claim ID</th>
                   <th className="px-6 py-3">Vehicle Reg. #</th>
                   <th className="px-6 py-3">Submission Date</th>
-                  <th className="px-6 py-3">AI Prediction</th>
-                  <th className="px-6 py-3">Confidence Score</th>
-                  <th className="px-6 py-3">Investigation Status</th>
+                  {isInvestigator && <th className="px-6 py-3">AI Prediction</th>}
+                  {isInvestigator && <th className="px-6 py-3">Confidence Score</th>}
+                  <th className="px-6 py-3">Claim Status</th>
                   <th className="px-6 py-3 text-right">Details</th>
                 </tr>
               </thead>
@@ -114,15 +117,19 @@ export default function ClaimsHistoryPage() {
                     <td className="px-6 py-4 text-xs text-slate-600 tabular-nums">
                       {new Date(claim.createdAt).toLocaleDateString()}
                     </td>
-                    <td className="px-6 py-4">
-                      <PredictionBadge
-                        prediction={claim.aiPrediction}
-                        isDemo={claim.latestAnalysisId?.isDemoPrediction}
-                      />
-                    </td>
-                    <td className="px-6 py-4">
-                      <ConfidenceBar score={claim.confidenceScore} prediction={claim.aiPrediction} />
-                    </td>
+                    {isInvestigator && (
+                      <td className="px-6 py-4">
+                        <PredictionBadge
+                          prediction={claim.aiPrediction}
+                          isDemo={claim.latestAnalysisId?.isDemoPrediction}
+                        />
+                      </td>
+                    )}
+                    {isInvestigator && (
+                      <td className="px-6 py-4">
+                        <ConfidenceBar score={claim.confidenceScore} prediction={claim.aiPrediction} />
+                      </td>
+                    )}
                     <td className="px-6 py-4">
                       <InvestigationStatusBadge status={claim.investigationStatus} />
                     </td>

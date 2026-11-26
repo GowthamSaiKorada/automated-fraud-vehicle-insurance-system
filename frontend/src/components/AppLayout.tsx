@@ -41,11 +41,12 @@ export default function AppLayout({
   const [aiHealth, setAiHealth] = useState<AiHealthInfo | null>(null);
 
   useEffect(() => {
+    if (user?.role !== 'investigator') return;
     apiClient
       .get('/health')
       .then((res) => setAiHealth(res.data?.aiService || null))
       .catch(() => setAiHealth({ reachable: false }));
-  }, []);
+  }, [user?.role]);
 
   const isInvestigator = user?.role === 'investigator';
 
@@ -53,7 +54,6 @@ export default function AppLayout({
     ? [
         { to: '/investigator', label: 'Investigator Desk', icon: UserCheck },
         { to: '/claims', label: 'All Claims', icon: FolderClock },
-        { to: '/submit-claim', label: 'Submit Test Claim', icon: FilePlus2 },
         { to: '/analytics', label: 'Analytics', icon: BarChart3 },
         { to: '/settings', label: 'Profile & Settings', icon: Settings },
       ]
@@ -61,7 +61,6 @@ export default function AppLayout({
         { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { to: '/submit-claim', label: 'Submit Claim', icon: FilePlus2 },
         { to: '/claims', label: 'Claims History', icon: FolderClock },
-        { to: '/analytics', label: 'Analytics', icon: BarChart3 },
         { to: '/settings', label: 'Profile & Settings', icon: Settings },
       ];
 
@@ -125,21 +124,23 @@ export default function AppLayout({
       </nav>
 
       <div className="border-t border-white/10 p-4 space-y-3">
-        <div className="rounded-xl bg-[#102952] px-3 py-2.5 text-xs">
-          <div className="flex items-center gap-2 font-semibold text-sky-200">
-            <Cpu className="h-3.5 w-3.5" />
-            AI Engine Status
+        {isInvestigator && (
+          <div className="rounded-xl bg-[#102952] px-3 py-2.5 text-xs">
+            <div className="flex items-center gap-2 font-semibold text-sky-200">
+              <Cpu className="h-3.5 w-3.5" />
+              AI Engine Status
+            </div>
+            {aiHealth === null ? (
+              <div className="mt-1 text-slate-400">Checking FastAPI...</div>
+            ) : !aiHealth.reachable ? (
+              <div className="mt-1 text-rose-300">AI Service Offline</div>
+            ) : aiHealth.cnn_model?.loaded ? (
+              <div className="mt-1 text-emerald-300">Trained CNN Active</div>
+            ) : (
+              <div className="mt-1 text-amber-300">Demo Mode (No CNN Weights)</div>
+            )}
           </div>
-          {aiHealth === null ? (
-            <div className="mt-1 text-slate-400">Checking FastAPI...</div>
-          ) : !aiHealth.reachable ? (
-            <div className="mt-1 text-rose-300">AI Service Offline</div>
-          ) : aiHealth.cnn_model?.loaded ? (
-            <div className="mt-1 text-emerald-300">Trained CNN Active</div>
-          ) : (
-            <div className="mt-1 text-amber-300">Demo Mode (No CNN Weights)</div>
-          )}
-        </div>
+        )}
 
         <button
           type="button"

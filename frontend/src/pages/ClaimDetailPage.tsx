@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import {
   AlertTriangle,
   ArrowLeft,
+  BarChart2,
   Camera,
   CheckCircle2,
   Cpu,
@@ -16,6 +17,16 @@ import {
   Sparkles,
   XCircle,
 } from 'lucide-react';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import AppLayout from '../components/AppLayout';
 import { InvestigationStatusBadge, PredictionBadge } from '../components/StatusBadges';
 import { apiClient, extractErrorMessage, resolveMediaUrl } from '../api/client';
@@ -109,12 +120,17 @@ export default function ClaimDetailPage() {
   const details = analysis?.analysisDetails;
   const heatmapUrl = details?.visual_explanation?.heatmap_data_url;
   const isSuspicious = analysis?.prediction === 'SUSPICIOUS';
-  const backLink = user?.role === 'investigator' ? '/investigator' : '/claims';
+  const isInvestigator = user?.role === 'investigator';
+  const backLink = isInvestigator ? '/investigator' : '/claims';
 
   return (
     <AppLayout
-      title={claim ? `Claim ${claim.claimNumber}` : 'Claim Verification Details'}
-      subtitle="AI image authenticity assessment, forensic metrics, and investigator decision record"
+      title={claim ? `Claim ${claim.claimNumber}` : 'Claim Details'}
+      subtitle={
+        isInvestigator
+          ? 'AI image authenticity assessment, forensic metrics, and investigator decision record'
+          : 'Your submitted vehicle claim photo, current status, and investigator response'
+      }
       actions={
         <Link
           to={backLink}
@@ -133,7 +149,7 @@ export default function ClaimDetailPage() {
 
       {loading ? (
         <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center text-sm text-slate-500">
-          Loading claim record and AI forensic analysis...
+          Loading claim record...
         </div>
       ) : !claim ? (
         <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center text-sm text-slate-500">
@@ -141,31 +157,34 @@ export default function ClaimDetailPage() {
         </div>
       ) : (
         <div className="space-y-6">
-          {/* Explicit Demo Mode Notice */}
-          {(analysis?.isDemoPrediction || claim.isDemoData || analysis?.modelStatus === 'demo_mode') && (
-            <div className="flex items-start gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-              <div>
-                <div className="font-bold">
-                  {claim.isDemoData
-                    ? 'Sample Demo Record — Not a Real Claim'
-                    : 'Demo Mode Analysis — No Trained CNN Model Connected'}
+          {/* Explicit Demo Mode Notice (Investigator only) */}
+          {isInvestigator &&
+            (analysis?.isDemoPrediction || claim.isDemoData || analysis?.modelStatus === 'demo_mode') && (
+              <div className="flex items-start gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+                <div>
+                  <div className="font-bold">
+                    {claim.isDemoData
+                      ? 'Sample Demo Record — Not a Real Claim'
+                      : 'Demo Mode Analysis — No Trained CNN Model Connected'}
+                  </div>
+                  <p className="mt-1 text-xs leading-relaxed text-amber-800">
+                    {analysis?.disclaimer ||
+                      'This analysis was generated in Demo Mode and must not be treated as a verified real-world CNN fraud verdict. Connect a trained PyTorch CNN checkpoint via CNN_MODEL_PATH on the FastAPI AI service for learned classification.'}
+                  </p>
                 </div>
-                <p className="mt-1 text-xs leading-relaxed text-amber-800">
-                  {analysis?.disclaimer ||
-                    'This analysis was generated in Demo Mode and must not be treated as a verified real-world CNN fraud verdict. Connect a trained PyTorch CNN checkpoint via CNN_MODEL_PATH on the FastAPI AI service for learned classification.'}
-                </p>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Top Grid: Image Preview + AI Classification Summary */}
+          {/* Top Grid: Image Preview + (AI Classification for Investigator / Investigator Reply for Customer) */}
           <div className="grid gap-6 lg:grid-cols-12">
-            {/* Image + ELA Visual Toggle */}
+            {/* Uploaded Image */}
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-6">
               <div className="flex flex-wrap items-center justify-between gap-2 pb-4">
-                <h2 className="text-sm font-bold text-[#0B1E3D]">Uploaded Vehicle Evidence</h2>
-                {heatmapUrl && (
+                <h2 className="text-sm font-bold text-[#0B1E3D]">
+                  {isInvestigator ? 'Uploaded Vehicle Evidence' : 'Submitted Vehicle Photo'}
+                </h2>
+                {isInvestigator && heatmapUrl && (
                   <div className="inline-flex rounded-xl border border-slate-200 bg-slate-100 p-1 text-xs font-semibold">
                     <button
                       type="button"
@@ -191,13 +210,17 @@ export default function ClaimDetailPage() {
 
               <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-950">
                 <img
-                  src={viewMode === 'ela' && heatmapUrl ? heatmapUrl : resolveMediaUrl(claim.imageUrl)}
+                  src={
+                    isInvestigator && viewMode === 'ela' && heatmapUrl
+                      ? heatmapUrl
+                      : resolveMediaUrl(claim.imageUrl)
+                  }
                   alt={claim.imageOriginalName}
                   className="max-h-80 w-full object-contain"
                 />
               </div>
 
-              {viewMode === 'ela' && details?.visual_explanation?.description && (
+              {isInvestigator && viewMode === 'ela' && details?.visual_explanation?.description && (
                 <p className="mt-3 rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
                   <strong>{details.visual_explanation.type}:</strong> {details.visual_explanation.description}
                 </p>
@@ -207,20 +230,23 @@ export default function ClaimDetailPage() {
                 <span>
                   File: <strong className="text-slate-700">{claim.imageOriginalName}</strong>
                 </span>
-                <button
-                  type="button"
-                  onClick={handleReAnalyze}
-                  disabled={analyzing}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-sky-200 bg-sky-50 px-3 py-1.5 font-semibold text-[#0E2954] transition hover:bg-sky-100 disabled:opacity-50"
-                >
-                  <RefreshCw className={`h-3.5 w-3.5 ${analyzing ? 'animate-spin' : ''}`} />
-                  {analyzing ? 'Analyzing...' : analysis ? 'Re-Analyze Image' : 'Analyze Image'}
-                </button>
+                {isInvestigator && (
+                  <button
+                    type="button"
+                    onClick={handleReAnalyze}
+                    disabled={analyzing}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-sky-200 bg-sky-50 px-3 py-1.5 font-semibold text-[#0E2954] transition hover:bg-sky-100 disabled:opacity-50"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${analyzing ? 'animate-spin' : ''}`} />
+                    {analyzing ? 'Analyzing...' : analysis ? 'Re-Analyze Image' : 'Analyze Image'}
+                  </button>
+                )}
               </div>
             </div>
 
-            {/* AI Classification Card */}
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-6">
+            {isInvestigator ? (
+              /* AI Classification Card (Investigator only) */
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-6">
               <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4">
                 <div>
                   <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
@@ -339,11 +365,212 @@ export default function ClaimDetailPage() {
                   verification.
                 </div>
               )}
-            </div>
+              </div>
+            ) : (
+              /* Customer View: Claim Status & Investigator Reply Only */
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-6 flex flex-col justify-between">
+                <div>
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    Claim Status & Investigator Response
+                  </span>
+                  <div className="mt-3">
+                    <InvestigationStatusBadge status={claim.investigationStatus} />
+                  </div>
+
+                  {history.length > 0 ? (
+                    <div className="mt-5 rounded-xl border border-slate-200 bg-[#F9FBFE] p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                        <span className="font-bold text-[#0B1E3D]">
+                          Latest Decision: {history[0].action}
+                        </span>
+                        <span className="text-slate-500 tabular-nums">
+                          {new Date(history[0].reviewedAt).toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-xs text-slate-500">
+                        Investigator: <strong className="text-slate-700">{history[0].investigatorName}</strong>
+                      </div>
+                      <p className="mt-3 rounded-lg bg-white p-3 text-sm leading-relaxed text-slate-800 border border-slate-100">
+                        {history[0].remarks}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="mt-5 rounded-xl border border-sky-200 bg-sky-50/70 p-4 text-sm text-[#0E2954]">
+                      <div className="font-semibold">Under Investigator Review</div>
+                      <p className="mt-1 text-xs leading-relaxed text-slate-600">
+                        Your claim and uploaded vehicle photo have been submitted successfully. An authorized
+                        insurance investigator will review your submission and post their response here.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-6 border-t border-slate-100 pt-4 text-xs text-slate-500">
+                  Submitted on {new Date(claim.createdAt).toLocaleString()}
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* F. Detailed Image Analysis Section */}
-          {details && (
+          {/* Multi-Model Comparison (Investigator only: CNN, YOLO, ResNet18, VGG16, MobileNetV2) */}
+          {isInvestigator && analysis?.modelComparisons && analysis.modelComparisons.length > 0 && (
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-4">
+                <div>
+                  <h2 className="flex items-center gap-2 text-base font-bold text-[#0B1E3D]">
+                    <BarChart2 className="h-5 w-5 text-sky-600" />
+                    Multi-Model Authenticity vs. Suspicious Comparison
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Side-by-side probability scores across CNN, YOLOv8n-cls, ResNet18, VGG16, and MobileNetV2
+                  </p>
+                </div>
+                <span className="rounded-lg bg-sky-50 px-2.5 py-1 text-xs font-semibold text-[#0E2954]">
+                  {analysis.modelComparisons.filter((m) => m.status === 'model_loaded').length} /{' '}
+                  {analysis.modelComparisons.length} Models Active
+                </span>
+              </div>
+
+              <div className="mt-5 grid gap-6 lg:grid-cols-12">
+                {/* Per-model probability bars */}
+                <div className="space-y-3 lg:col-span-6">
+                  {analysis.modelComparisons.map((m) => {
+                    const loaded = m.status === 'model_loaded';
+                    const authP = m.authentic_probability ?? 0;
+                    const suspP = m.suspicious_probability ?? 0;
+                    return (
+                      <div
+                        key={m.model_key}
+                        className="rounded-xl border border-slate-200 bg-[#F9FBFE] p-4"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-bold text-[#0B1E3D]">{m.model_name}</span>
+                            {m.val_accuracy !== null && m.val_accuracy !== undefined && (
+                              <span className="rounded bg-slate-200/80 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700">
+                                Val Acc: {m.val_accuracy}%
+                              </span>
+                            )}
+                          </div>
+                          {loaded && m.prediction ? (
+                            <PredictionBadge prediction={m.prediction} />
+                          ) : (
+                            <span className="rounded-full bg-slate-200 px-2.5 py-0.5 text-xs font-semibold text-slate-600">
+                              Unavailable
+                            </span>
+                          )}
+                        </div>
+
+                        {loaded ? (
+                          <div className="mt-3 space-y-2.5">
+                            <div>
+                              <div className="flex justify-between text-xs font-medium">
+                                <span className="text-emerald-700">Authenticity Probability</span>
+                                <span className="tabular-nums font-bold text-emerald-700">
+                                  {authP.toFixed(1)}%
+                                </span>
+                              </div>
+                              <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-200">
+                                <div
+                                  className="h-full rounded-full bg-emerald-500"
+                                  style={{ width: `${authP}%` }}
+                                />
+                              </div>
+                            </div>
+
+                            <div>
+                              <div className="flex justify-between text-xs font-medium">
+                                <span className="text-rose-700">Suspicious Probability</span>
+                                <span className="tabular-nums font-bold text-rose-700">
+                                  {suspP.toFixed(1)}%
+                                </span>
+                              </div>
+                              <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-200">
+                                <div
+                                  className="h-full rounded-full bg-rose-500"
+                                  style={{ width: `${suspP}%` }}
+                                />
+                              </div>
+                            </div>
+
+                            <div className="mt-2 rounded-lg border border-slate-200/80 bg-white p-3 text-xs space-y-1.5">
+                              {m.architecture && (
+                                <div className="text-slate-600">
+                                  <strong className="text-[#0B1E3D]">Architecture:</strong> {m.architecture}
+                                </div>
+                              )}
+                              <div className="flex flex-wrap gap-3 text-[11px] text-slate-600">
+                                {m.decision_strength && (
+                                  <span>
+                                    <strong>Strength:</strong> {m.decision_strength}
+                                  </span>
+                                )}
+                                {m.inference_time_ms !== null && m.inference_time_ms !== undefined && (
+                                  <span className="tabular-nums">
+                                    <strong>Latency:</strong> {m.inference_time_ms} ms
+                                  </span>
+                                )}
+                                {m.logit_margin !== null && m.logit_margin !== undefined && (
+                                  <span className="tabular-nums">
+                                    <strong>Logit Gap:</strong> {m.logit_margin > 0 ? `+${m.logit_margin}` : m.logit_margin}
+                                  </span>
+                                )}
+                              </div>
+                              {m.reason && (
+                                <p className="leading-relaxed text-slate-700">
+                                  <strong className="text-[#0B1E3D]">Why {m.prediction}:</strong> {m.reason}
+                                </p>
+                              )}
+                              {m.forensic_flags && m.forensic_flags.length > 0 && (
+                                <div className="pt-1 text-[11px] text-amber-800">
+                                  <strong>Image Forensic Factors:</strong> {m.forensic_flags.join(' · ')}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="mt-2 text-xs text-slate-500">
+                            {m.reason || `Model weights not loaded for ${m.model_name}.`}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Grouped Bar Chart comparing all 5 models */}
+                <div className="rounded-xl border border-slate-200 bg-[#F9FBFE] p-4 lg:col-span-6">
+                  <div className="text-xs font-bold uppercase tracking-wide text-slate-600">
+                    Probability Comparison Chart (%)
+                  </div>
+                  <div className="mt-3 h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={analysis.modelComparisons
+                          .filter((m) => m.status === 'model_loaded')
+                          .map((m) => ({
+                            model: m.model_name,
+                            Authentic: m.authentic_probability ?? 0,
+                            Suspicious: m.suspicious_probability ?? 0,
+                          }))}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis dataKey="model" tick={{ fontSize: 11 }} />
+                        <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="Authentic" name="Authenticity %" fill="#10b981" radius={[6, 6, 0, 0]} />
+                        <Bar dataKey="Suspicious" name="Suspicious %" fill="#ef4444" radius={[6, 6, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* F. Detailed Image Analysis Section (Investigator only) */}
+          {isInvestigator && details && (
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
               <div className="border-b border-slate-100 pb-4">
                 <h2 className="text-base font-bold text-[#0B1E3D]">Forensic Image Analysis Details</h2>
@@ -692,7 +919,9 @@ export default function ClaimDetailPage() {
 
               {/* Investigation Audit History */}
               <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h2 className="text-base font-bold text-[#0B1E3D]">Investigation Audit Trail</h2>
+                <h2 className="text-base font-bold text-[#0B1E3D]">
+                  {isInvestigator ? 'Investigation Audit Trail' : 'Investigator Responses'}
+                </h2>
                 {history.length === 0 ? (
                   <p className="mt-3 text-xs text-slate-500">
                     No investigator decisions have been recorded for this claim yet.

@@ -56,6 +56,10 @@ const analysisResultSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       default: null,
     },
+    modelComparisons: {
+      type: [mongoose.Schema.Types.Mixed],
+      default: [],
+    },
     analyzedAt: {
       type: Date,
       default: Date.now,

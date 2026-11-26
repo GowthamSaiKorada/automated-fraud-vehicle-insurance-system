@@ -95,6 +95,10 @@ def health_check() -> Dict[str, Any]:
             "model_path": model_manager.yolo_model_path,
             "reason": model_manager.yolo_load_error,
         },
+        "comparison_models": {
+            k: {"model_name": v.get("model_name"), "loaded": bool(v.get("loaded"))}
+            for k, v in model_manager.comparison_models.items()
+        },
     }
 
 
@@ -107,6 +111,7 @@ async def predict_image_authenticity(file: UploadFile = File(...)) -> Dict[str, 
     """
     image, file_size, filename = await _read_and_validate_image(file)
     forensics = analyze_image_forensics(image, file_size, filename)
+    model_comparisons = model_manager.predict_all_models(image, forensics["analysis_details"])
 
     if model_manager.cnn_loaded:
         prediction, confidence, auth_prob, susp_prob = model_manager.predict_cnn(image)
@@ -122,6 +127,7 @@ async def predict_image_authenticity(file: UploadFile = File(...)) -> Dict[str, 
             "model_status": "model_loaded",
             "is_demo_prediction": False,
             "model_architecture": arch_label,
+            "model_comparisons": model_comparisons,
             "disclaimer": (
                 "AI classification is an investigative decision-support signal and does not "
                 "automatically establish insurance fraud. Final decisions remain with authorized investigators."
@@ -138,6 +144,7 @@ async def predict_image_authenticity(file: UploadFile = File(...)) -> Dict[str, 
         "model_status": "demo_mode",
         "is_demo_prediction": True,
         "model_architecture": "Deterministic Forensic Heuristic (Demo Mode - No CNN Weights Loaded)",
+        "model_comparisons": model_comparisons,
         "disclaimer": (
             "DEMO MODE ACTIVE: No trained CNN weights file is currently connected "
             f"({model_manager.cnn_load_error}). Image quality, ELA, noise, edge, and EXIF metrics "

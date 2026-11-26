@@ -98,6 +98,23 @@ export interface DamageDetectionResult {
   message?: string;
 }
 
+export interface ModelComparisonItem {
+  model_key: string;
+  model_name: string;
+  status: 'model_loaded' | 'model_unavailable';
+  prediction: 'AUTHENTIC' | 'SUSPICIOUS' | null;
+  confidence: number | null;
+  authentic_probability: number | null;
+  suspicious_probability: number | null;
+  val_accuracy: number | null;
+  architecture?: string;
+  decision_strength?: string;
+  inference_time_ms?: number | null;
+  logit_margin?: number | null;
+  reason?: string;
+  forensic_flags?: string[];
+}
+
 export interface AnalysisResult {
   _id: string;
   claimId: string;
@@ -111,6 +128,7 @@ export interface AnalysisResult {
   disclaimer?: string;
   analysisDetails?: AnalysisDetails;
   damageDetection?: DamageDetectionResult | null;
+  modelComparisons?: ModelComparisonItem[];
   analyzedAt: string;
 }
 
