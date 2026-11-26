@@ -1,0 +1,103 @@
+"""
+Training utility for VehicleForensicCNN.
+
+Expected dataset directory layout:
+  dataset/
+    train/
+      authentic/
+      suspicious/
+    val/
+      authentic/
+      suspicious/
+
+Example usage:
+  python train_model.py --data-dir ./dataset --epochs 15 --output ./models/forensic_cnn.pth
+"""
+
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+
+import torch
+import torch.nn as nn
+from torch.utils.data import DataLoader
+from torchvision import datasets, transforms
+
+from app.model import VehicleForensicCNN
+
+
+def train(data_dir: Path, epochs: int, batch_size: int, lr: float, output_path: Path) -> None:
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    train_tf = transforms.Compose(
+        [
+            transforms.Resize((224, 224)),
+            transforms.RandomHorizontalFlip(),
+            transforms.ColorJitter(brightness=0.1, contrast=0.1),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ]
+    )
+    val_tf = transforms.Compose(
+        [
+            transforms.Resize((224, 224)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ]
+    )
+
+    train_ds = datasets.ImageFolder(data_dir / "train", transform=train_tf)
+    val_ds = datasets.ImageFolder(data_dir / "val", transform=val_tf)
+    print(f"Class mapping: {train_ds.class_to_idx} (expected authentic=0, suspicious=1)")
+
+    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=2)
+    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=2)
+
+    model = VehicleForensicCNN(num_classes=2).to(device)
+    criterion = nn.CrossEntropyLoss()
+    optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
+
+    best_acc = 0.0
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    for epoch in range(1, epochs + 1):
+        model.train()
+        running_loss = 0.0
+        for images, labels in train_loader:
+            images, labels = images.to(device), labels.to(device)
+            optimizer.zero_grad()
+            logits = model(images)
+            loss = criterion(logits, labels)
+            loss.backward()
+            optimizer.step()
+            running_loss += loss.item() * images.size(0)
+
+        model.eval()
+        correct = 0
+        total = 0
+        with torch.inference_mode():
+            for images, labels in val_loader:
+                images, labels = images.to(device), labels.to(device)
+                preds = model(images).argmax(dim=1)
+                correct += int((preds == labels).sum().item())
+                total += labels.size(0)
+
+        val_acc = correct / max(total, 1)
+        print(f"Epoch {epoch}/{epochs} | train_loss={running_loss / len(train_ds):.4f} | val_acc={val_acc:.4f}")
+
+        if val_acc >= best_acc:
+            best_acc = val_acc
+            torch.save({"model_state_dict": model.state_dict(), "val_acc": val_acc}, output_path)
+            print(f"Saved checkpoint to {output_path} (val_acc={val_acc:.4f})")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Train VehicleForensicCNN")
+    parser.add_argument("--data-dir", type=Path, required=True)
+    parser.add_argument("--epochs", type=int, default=15)
+    parser.add_argument("--batch-size", type=int, default=16)
+    parser.add_argument("--lr", type=float, default=3e-4)
+    parser.add_argument("--output", type=Path, default=Path("models/forensic_cnn.pth"))
+    args = parser.parse_args()
+    train(args.data_dir, args.epochs, args.batch_size, args.lr, args.output)
