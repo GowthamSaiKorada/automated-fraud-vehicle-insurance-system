@@ -9,6 +9,7 @@ import {
   FileText,
   Info,
   ShieldAlert,
+  Trash2,
 } from 'lucide-react';
 import AppLayout from '../components/AppLayout';
 import { ConfidenceBar, InvestigationStatusBadge, PredictionBadge } from '../components/StatusBadges';
@@ -19,14 +20,36 @@ export default function CustomerDashboardPage() {
   const [data, setData] = useState<AnalyticsDashboardResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadDashboard = () => {
+    setLoading(true);
     apiClient
       .get('/analytics/dashboard')
       .then((res) => setData(res.data))
       .catch((err) => setError(extractErrorMessage(err, 'Failed to load dashboard data.')))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadDashboard();
   }, []);
+
+  const handleDeleteClaim = async (claimId: string, claimNumber: string) => {
+    if (!window.confirm(`Delete claim ${claimNumber}? This removes it for both you and investigators.`)) {
+      return;
+    }
+    setDeletingId(claimId);
+    setError('');
+    try {
+      await apiClient.delete(`/claims/${claimId}`);
+      loadDashboard();
+    } catch (err) {
+      setError(extractErrorMessage(err, 'Failed to delete claim.'));
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const summary = data?.summary;
 
@@ -196,12 +219,24 @@ export default function CustomerDashboardPage() {
                       <InvestigationStatusBadge status={claim.investigationStatus} />
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <Link
-                        to={`/claims/${claim._id}`}
-                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-[#0E2954] transition hover:bg-slate-100"
-                      >
-                        View Details
-                      </Link>
+                      <div className="inline-flex items-center gap-2">
+                        <Link
+                          to={`/claims/${claim._id}`}
+                          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-[#0E2954] transition hover:bg-slate-100"
+                        >
+                          View Details
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteClaim(claim._id, claim.claimNumber)}
+                          disabled={deletingId === claim._id}
+                          className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 disabled:opacity-50"
+                          title="Delete claim"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          {deletingId === claim._id ? 'Deleting...' : 'Delete'}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

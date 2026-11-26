@@ -24,10 +24,17 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 
-from app.model import VehicleForensicCNN
+from app.model import VehicleForensicCNN, build_mobilenet_classifier
 
 
-def train(data_dir: Path, epochs: int, batch_size: int, lr: float, output_path: Path) -> None:
+def train(
+    data_dir: Path,
+    epochs: int,
+    batch_size: int,
+    lr: float,
+    output_path: Path,
+    backbone: str = "mobilenet_v3_small",
+) -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     train_tf = transforms.Compose(
@@ -47,14 +54,22 @@ def train(data_dir: Path, epochs: int, batch_size: int, lr: float, output_path: 
         ]
     )
 
-    train_ds = datasets.ImageFolder(data_dir / "train", transform=train_tf)
-    val_ds = datasets.ImageFolder(data_dir / "val", transform=val_tf)
-    print(f"Class mapping: {train_ds.class_to_idx} (expected authentic=0, suspicious=1)")
+    train_dir = data_dir / "training" if (data_dir / "training").is_dir() else data_dir / "train"
+    val_dir = data_dir / "validation" if (data_dir / "validation").is_dir() else data_dir / "val"
 
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=2)
-    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=2)
+    train_ds = datasets.ImageFolder(train_dir, transform=train_tf)
+    val_ds = datasets.ImageFolder(val_dir, transform=val_tf)
+    print(f"Train dir: {train_dir} ({len(train_ds)} images) | Val dir: {val_dir} ({len(val_ds)} images)")
+    print(f"Class mapping: {train_ds.class_to_idx} (index 0 -> AUTHENTIC, index 1 -> SUSPICIOUS)")
 
-    model = VehicleForensicCNN(num_classes=2).to(device)
+    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=0)
+    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=0)
+
+    if backbone == "mobilenet_v3_small":
+        model = build_mobilenet_classifier(num_classes=2, pretrained=True).to(device)
+    else:
+        model = VehicleForensicCNN(num_classes=2).to(device)
+    print(f"Training backbone={backbone} on device={device}")
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
 
@@ -88,16 +103,25 @@ def train(data_dir: Path, epochs: int, batch_size: int, lr: float, output_path: 
 
         if val_acc >= best_acc:
             best_acc = val_acc
-            torch.save({"model_state_dict": model.state_dict(), "val_acc": val_acc}, output_path)
+            torch.save(
+                {
+                    "model_state_dict": model.state_dict(),
+                    "val_acc": val_acc,
+                    "class_to_idx": train_ds.class_to_idx,
+                    "backbone": backbone,
+                },
+                output_path,
+            )
             print(f"Saved checkpoint to {output_path} (val_acc={val_acc:.4f})")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train VehicleForensicCNN")
     parser.add_argument("--data-dir", type=Path, required=True)
-    parser.add_argument("--epochs", type=int, default=15)
-    parser.add_argument("--batch-size", type=int, default=16)
+    parser.add_argument("--epochs", type=int, default=6)
+    parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--lr", type=float, default=3e-4)
+    parser.add_argument("--backbone", type=str, default="mobilenet_v3_small", choices=["mobilenet_v3_small", "custom"])
     parser.add_argument("--output", type=Path, default=Path("models/forensic_cnn.pth"))
     args = parser.parse_args()
-    train(args.data_dir, args.epochs, args.batch_size, args.lr, args.output)
+    train(args.data_dir, args.epochs, args.batch_size, args.lr, args.output, args.backbone)

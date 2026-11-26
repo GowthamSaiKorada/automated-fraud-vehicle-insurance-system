@@ -85,6 +85,8 @@ def health_check() -> Dict[str, Any]:
             "loaded": model_manager.cnn_loaded,
             "model_status": "model_loaded" if model_manager.cnn_loaded else "demo_mode",
             "model_path": model_manager.cnn_model_path,
+            "class_mapping": model_manager.cnn_class_mapping,
+            "val_acc": model_manager.cnn_val_acc,
             "reason": model_manager.cnn_load_error,
         },
         "yolo_damage_detector": {
@@ -108,6 +110,10 @@ async def predict_image_authenticity(file: UploadFile = File(...)) -> Dict[str, 
 
     if model_manager.cnn_loaded:
         prediction, confidence, auth_prob, susp_prob = model_manager.predict_cnn(image)
+        arch_label = "VehicleForensicCNN (PyTorch)"
+        if model_manager.cnn_class_mapping:
+            classes = ", ".join(sorted(model_manager.cnn_class_mapping.keys()))
+            arch_label = f"VehicleForensicCNN (PyTorch · {classes})"
         return {
             "prediction": prediction,
             "confidence": confidence,
@@ -115,7 +121,7 @@ async def predict_image_authenticity(file: UploadFile = File(...)) -> Dict[str, 
             "suspicious_probability": susp_prob,
             "model_status": "model_loaded",
             "is_demo_prediction": False,
-            "model_architecture": "VehicleForensicCNN (PyTorch)",
+            "model_architecture": arch_label,
             "disclaimer": (
                 "AI classification is an investigative decision-support signal and does not "
                 "automatically establish insurance fraud. Final decisions remain with authorized investigators."

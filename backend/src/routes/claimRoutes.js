@@ -387,4 +387,40 @@ router.patch('/:id/investigate', authenticate, requireRole('investigator'), asyn
   }
 });
 
+// DELETE /api/claims/:id (Owner customer or Investigator)
+router.delete('/:id', authenticate, async (req, res, next) => {
+  try {
+    const claim = await InsuranceClaim.findById(req.params.id);
+    if (!claim) {
+      return res.status(404).json({ message: 'Claim not found.' });
+    }
+
+    if (req.user.role !== 'investigator' && claim.customerId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'You are not authorized to delete this claim.' });
+    }
+
+    await Promise.all([
+      AnalysisResult.deleteMany({ claimId: claim._id }),
+      InvestigationRecord.deleteMany({ claimId: claim._id }),
+      InsuranceClaim.deleteOne({ _id: claim._id }),
+    ]);
+
+    // Remove uploaded claim image from disk (skip shared demo images)
+    if (!claim.isDemoData && claim.imagePath) {
+      const resolved = path.resolve(claim.imagePath);
+      const allowedBase = path.resolve(CLAIMS_UPLOAD_DIR);
+      if (resolved.startsWith(allowedBase + path.sep) && fs.existsSync(resolved)) {
+        fs.unlink(resolved, () => {});
+      }
+    }
+
+    return res.json({
+      message: `Claim ${claim.claimNumber} deleted permanently.`,
+      deletedClaimId: claim._id,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

@@ -12,6 +12,7 @@ from typing import Any, Dict, Optional, Tuple
 
 import torch
 import torch.nn as nn
+import torchvision.models as tv_models
 import torchvision.transforms as T
 from PIL import Image
 
@@ -85,6 +86,15 @@ class VehicleForensicCNN(nn.Module):
         return self.classifier(x)
 
 
+def build_mobilenet_classifier(num_classes: int = 2, pretrained: bool = False) -> nn.Module:
+    """Lightweight MobileNetV3-Small CNN classifier for fast CPU/GPU inference and transfer learning."""
+    weights = tv_models.MobileNet_V3_Small_Weights.DEFAULT if pretrained else None
+    model = tv_models.mobilenet_v3_small(weights=weights)
+    in_features = model.classifier[-1].in_features
+    model.classifier[-1] = nn.Linear(in_features, num_classes)
+    return model
+
+
 def build_preprocess_transform(image_size: int = 224) -> T.Compose:
     """Standard preprocessing pipeline: resize, RGB tensor, ImageNet normalization."""
     return T.Compose(
@@ -103,10 +113,13 @@ class ModelManager:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.preprocess = build_preprocess_transform(224)
 
-        self.cnn_model: Optional[VehicleForensicCNN] = None
+        self.cnn_model: Optional[nn.Module] = None
         self.cnn_model_path: Optional[str] = None
         self.cnn_loaded: bool = False
         self.cnn_load_error: Optional[str] = None
+        self.cnn_class_mapping: Optional[Dict[str, int]] = None
+        self.cnn_val_acc: Optional[float] = None
+        self.cnn_backbone: str = "custom"
 
         self.yolo_model: Any = None
         self.yolo_model_path: Optional[str] = None
@@ -124,13 +137,26 @@ class ModelManager:
             resolved = Path(cnn_path_env)
             if resolved.is_file():
                 try:
-                    model = VehicleForensicCNN(num_classes=2)
                     checkpoint = torch.load(resolved, map_location=self.device, weights_only=True)
+                    backbone = (
+                        checkpoint.get("backbone", "custom")
+                        if isinstance(checkpoint, dict)
+                        else "custom"
+                    )
+                    model = (
+                        build_mobilenet_classifier(num_classes=2, pretrained=False)
+                        if backbone == "mobilenet_v3_small"
+                        else VehicleForensicCNN(num_classes=2)
+                    )
                     state_dict = (
                         checkpoint["model_state_dict"]
                         if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint
                         else checkpoint
                     )
+                    if isinstance(checkpoint, dict):
+                        self.cnn_class_mapping = checkpoint.get("class_to_idx")
+                        self.cnn_val_acc = checkpoint.get("val_acc")
+                    self.cnn_backbone = str(backbone)
                     model.load_state_dict(state_dict)
                     model.to(self.device)
                     model.eval()
@@ -160,6 +186,10 @@ class ModelManager:
             yolo_resolved = Path(yolo_path_env)
             if yolo_resolved.is_file():
                 try:
+                    config_dir = Path(__file__).resolve().parent.parent / ".ultralytics"
+                    config_dir.mkdir(parents=True, exist_ok=True)
+                    os.environ.setdefault("YOLO_CONFIG_DIR", str(config_dir))
+
                     from ultralytics import YOLO  # type: ignore
 
                     self.yolo_model = YOLO(str(yolo_resolved))

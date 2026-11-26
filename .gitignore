@@ -5,5 +5,7 @@ dist/
 __pycache__/
 *.pyc
 .venv/
+ai-service/.ultralytics/
+ai-service/.torch_cache/
 backend/uploads/claims/*
 !backend/uploads/claims/.gitkeep

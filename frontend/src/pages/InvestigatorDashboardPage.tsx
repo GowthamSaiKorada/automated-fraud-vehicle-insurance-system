@@ -8,6 +8,7 @@ import {
   Filter,
   Search,
   ShieldAlert,
+  Trash2,
 } from 'lucide-react';
 import AppLayout from '../components/AppLayout';
 import { ConfidenceBar, InvestigationStatusBadge, PredictionBadge } from '../components/StatusBadges';
@@ -19,6 +20,7 @@ export default function InvestigatorDashboardPage() {
   const [stats, setStats] = useState<AnalyticsDashboardResponse['summary'] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const [search, setSearch] = useState('');
   const [aiPrediction, setAiPrediction] = useState('ALL');
@@ -282,12 +284,35 @@ export default function InvestigatorDashboardPage() {
                       <InvestigationStatusBadge status={claim.investigationStatus} />
                     </td>
                     <td className="px-5 py-4 text-right">
-                      <Link
-                        to={`/claims/${claim._id}`}
-                        className="inline-flex items-center rounded-lg bg-[#0B1E3D] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#143666]"
-                      >
-                        Inspect Claim
-                      </Link>
+                      <div className="inline-flex items-center gap-2">
+                        <Link
+                          to={`/claims/${claim._id}`}
+                          className="inline-flex items-center rounded-lg bg-[#0B1E3D] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#143666]"
+                        >
+                          Inspect Claim
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!window.confirm(`Permanently delete claim ${claim.claimNumber}?`)) return;
+                            setDeletingId(claim._id);
+                            setError('');
+                            try {
+                              await apiClient.delete(`/claims/${claim._id}`);
+                              fetchDashboard();
+                            } catch (err) {
+                              setError(extractErrorMessage(err, 'Failed to delete claim.'));
+                            } finally {
+                              setDeletingId(null);
+                            }
+                          }}
+                          disabled={deletingId === claim._id}
+                          className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                          title="Delete claim"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
