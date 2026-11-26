@@ -164,7 +164,7 @@ def train_yolo_classifier():
             target_dir.mkdir(parents=True, exist_ok=True)
             for img_file in cls_dir.iterdir():
                 if img_file.is_file():
-                    os.link(img_file, target_dir / img_file.name)
+                    shutil.copy2(img_file, target_dir / img_file.name)
 
     runs_dir = BASE_DIR / ".yolo_runs"
     if runs_dir.exists():
@@ -174,7 +174,7 @@ def train_yolo_classifier():
     yolo.train(
         data=str(yolo_data),
         epochs=4,
-        imgsz=224,
+        imgsz=160,
         batch=32,
         project=str(runs_dir),
         name="damage_cls",
@@ -191,11 +191,23 @@ def train_yolo_classifier():
 
 
 if __name__ == "__main__":
+    if not (MODELS_DIR / "yolo_cls.pt").is_file():
+        train_yolo_classifier()
     if not (MODELS_DIR / "vgg16_damage.pth").is_file():
         if (MODELS_DIR / "resnet18_damage.pth").is_file() and (MODELS_DIR / "mobilenetv2_damage.pth").is_file():
-            print("ResNet18 & MobileNetV2 already saved; running remaining VGG16 + YOLOv8n-cls...")
-            train_ds, _, train_loader, val_loader = get_dataloaders(32)
-            class_to_idx = train_ds.class_to_idx
+            print("ResNet18 & MobileNetV2 already saved; training VGG16 (112x112)...")
+            tf_vgg = transforms.Compose(
+                [
+                    transforms.Resize((112, 112)),
+                    transforms.ToTensor(),
+                    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                ]
+            )
+            tr_ds_v = datasets.ImageFolder(DATA_DIR / "training", transform=tf_vgg)
+            va_ds_v = datasets.ImageFolder(DATA_DIR / "validation", transform=tf_vgg)
+            tr_ld_v = DataLoader(tr_ds_v, batch_size=64, shuffle=False, num_workers=0)
+            va_ld_v = DataLoader(va_ds_v, batch_size=64, shuffle=False, num_workers=0)
+            class_to_idx = tr_ds_v.class_to_idx
             vgg = tv_models.vgg16(weights=tv_models.VGG16_Weights.DEFAULT)
             vgg.eval()
             vgg_fc7 = nn.Sequential(*list(vgg.classifier.children())[:-1])
@@ -204,8 +216,8 @@ if __name__ == "__main__":
                 x = vgg.avgpool(x)
                 x = torch.flatten(x, 1)
                 return vgg_fc7(x)
-            tr_x, tr_y = extract_features(vgg_feat, train_loader)
-            va_x, va_y = extract_features(vgg_feat, val_loader)
+            tr_x, tr_y = extract_features(vgg_feat, tr_ld_v)
+            va_x, va_y = extract_features(vgg_feat, va_ld_v)
             vgg.classifier[-1] = nn.Linear(vgg.classifier[-1].in_features, 2)
             vgg_acc = train_head(vgg.classifier[-1], tr_x, tr_y, va_x, va_y, epochs=25, lr=1e-3)
             torch.save(
@@ -220,6 +232,4 @@ if __name__ == "__main__":
             print(f"Saved vgg16_damage.pth | val_acc={vgg_acc:.4f}")
         else:
             train_torchvision_models()
-    if not (MODELS_DIR / "yolo_cls.pt").is_file():
-        train_yolo_classifier()
     print("\nALL_COMPARISON_MODELS_TRAINED_OK")
